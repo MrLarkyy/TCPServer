@@ -1,59 +1,97 @@
 package xyz.larkyy;
 
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.ByteBufUtil;
-import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
-
-import java.nio.Buffer;
-import java.nio.charset.StandardCharsets;
+import xyz.larkyy.client.Client;
+import xyz.larkyy.packets.Packet;
+import xyz.larkyy.packets.PacketDecoder;
 
 public class PacketServerHandler extends ChannelDuplexHandler {
 
+    private final Client client;
+    public PacketServerHandler(Client client) {
+        this.client = client;
+    }
+
     @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) { // (2)
+    public void channelRead(ChannelHandlerContext ctx, Object msg) {
         ByteBuf in = (ByteBuf) msg;
 
         try {
             while (in.isReadable()) {
+                Packet packet = PacketDecoder.decode(client.getState(),in);
+                System.out.println("Client state: "+client.getState().name());
+                if (packet != null) {
+                    System.out.println("Handle");
+                    packet.handle(client);
+                }
+
+                /*
                 try {
-                    final var length = readVarInt(in);
+                    final var length = VarInt.readVarInt(in);
                     if (in.readableBytes() < length) {
                         return;
                     }
                     final var data = in.readBytes(length);
-                    final var packetId = readVarInt(data);
+                    final var packetId = VarInt.readVarInt(data);
                     System.out.println("Packet Length: "+length);
                     System.out.println("packetId: "+packetId);
 
                     if (packetId == 0x00) {
                         if (length == 1) {
-                            var pktId = 0x01;
                             ByteBuf buffer = Unpooled.buffer();
+
+                            var pktId = 0x00;
+                            String json = "{" +
+                                    "    \"version\": {" +
+                                    "        \"name\": \"\\u00a7dYOU REALLY ARE\"," +
+                                    "        \"protocol\": 762" +
+                                    "    }," +
+                                    "    \"players\": {" +
+                                    "        \"max\": 420," +
+                                    "        \"online\": 69," +
+                                    "        \"sample\": [" +
+                                    "            {" +
+                                    "                \"name\": \"U ARE\"," +
+                                    "                \"id\": \"4566e69f-c907-48ee-8d71-d7ba5aa00d20\"" +
+                                    "            },"+
+                                    "            {" +
+                                    "                \"name\": \"GAY!\"," +
+                                    "                \"id\": \"4566e69f-c907-48ee-8d71-d7ba5aa00d20\"" +
+                                    "            }"+
+                                    "        ]" +
+                                    "    }," +
+                                    "    \"description\": {" +
+                                    "        \"text\": \"\\u00a7dUR GAY LOL HAHAHAH\"" +
+                                    "    }," +
+                                    "    \"enforcesSecureChat\": true" +
+                                    "}";
+
                             ByteBuf packetData = Unpooled.buffer();
-                            packetData.writeLong(10);
+                            // PacketID
+                            VarInt.writeVarInt(pktId,packetData);
+                            // Data
+                            VarInt.writeVarInt(json.length(),packetData);
+                            packetData.writeBytes(json.getBytes(StandardCharsets.UTF_8));
 
                             // Length
-                            writeVarInt(packetData.readableBytes()*4+3,buffer);
-                            // PacketID
-                            writeVarInt(pktId,buffer);
+                            VarInt.writeVarInt(packetData.readableBytes(),buffer);
                             // Data
                             buffer.writeBytes(packetData);
 
                             ctx.write(buffer);
                             ctx.flush();
-                            System.out.println("Replying 2");
                             continue;
                         }
 
                         try {
-                            final var v = readVarInt(data);
+                            final var v = VarInt.readVarInt(data);
                             System.out.println("Protocol Version: "+v);
                         } catch (Exception ignored) {
                             continue;
                         }
-                        var stringLength = readVarInt(data);
+                        var stringLength = VarInt.readVarInt(data);
                         byte[] hostnameData = new byte[stringLength];
                         data.readBytes(hostnameData);
                         System.out.println("Hostname: "+ new String(hostnameData));
@@ -61,66 +99,39 @@ public class PacketServerHandler extends ChannelDuplexHandler {
                         short port = data.readShort();
                         System.out.println("Port: "+port);
 
-                        var nextState = readVarInt(data);
+                        var nextState = VarInt.readVarInt(data);
                         System.out.println("State: "+nextState);
-
-                        ByteBuf buffer = Unpooled.buffer();
-
-                        var pktId = 0x00;
-                        String json = "{" +
-                                "    \"version\": {" +
-                                "        \"name\": \"1.19.4\"," +
-                                "        \"protocol\": 762" +
-                                "    }," +
-                                "    \"players\": {" +
-                                "        \"max\": 100," +
-                                "        \"online\": 5," +
-                                "        \"sample\": [" +
-                                "            {" +
-                                "                \"name\": \"thinkofdeath\"," +
-                                "                \"id\": \"4566e69f-c907-48ee-8d71-d7ba5aa00d20\"" +
-                                "            }" +
-                                "        ]" +
-                                "    }," +
-                                "    \"description\": {" +
-                                "        \"text\": \"Hello world\"" +
-                                "    }," +
-                                "    \"favicon\": \"data:image/png;base64,<data>\"," +
-                                "    \"enforcesSecureChat\": true" +
-                                "}";
-
-                        ByteBuf packetData = Unpooled.buffer();
-                        ByteBufUtil.writeAscii(packetData,json);
-
-                        // Length
-                        writeVarInt(packetData.readableBytes()*4+3,buffer);
-                        // PacketID
-                        writeVarInt(pktId,buffer);
-                        // Data
-                        buffer.writeBytes(packetData);
-
-
-                        ctx.write(buffer);
-                        ctx.flush();
-                        System.out.println("Replying");
-
 
                     } else if (packetId == 0x01) {
 
                         System.out.println("PACKET 01");
                         System.out.flush();
-                        /*
-                        long ping = in.readLong();
+
+                        long ping = data.readLong();
                         System.out.println("Ping: "+ping);
 
-                         */
-
+                        ByteBuf buffer = Unpooled.buffer();
                         ByteBuf packetData = Unpooled.buffer();
+                        var pktId = 0x01;
+
+                        // Packet ID
+                        VarInt.writeVarInt(pktId,packetData);
+                        // Data
+                        packetData.writeLong(ping);
+                        // Length
+                        VarInt.writeVarInt(packetData.readableBytes(), buffer);
+                        // Data
+                        buffer.writeBytes(packetData);
+
+                        ctx.write(buffer);
+                        ctx.flush();
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
+                 */
             }
+
 
         } finally {
             //ReferenceCountUtil.release(msg); // (2)
@@ -133,41 +144,4 @@ public class PacketServerHandler extends ChannelDuplexHandler {
         cause.printStackTrace();
         ctx.close();
     }
-
-    private static final int SEGMENT_BITS = 0x7F;
-    private static final int CONTINUE_BIT = 0x80;
-
-    public int readVarInt(ByteBuf bb) throws Exception {
-        int value = 0;
-        int position = 0;
-        byte currentByte;
-
-        while (true) {
-            currentByte = bb.readByte();
-            value |= (currentByte & SEGMENT_BITS) << position;
-
-            if ((currentByte & CONTINUE_BIT) == 0) break;
-
-            position += 7;
-
-            if (position >= 32) throw new RuntimeException("VarInt is too big");
-        }
-
-        return value;
-    }
-
-    public void writeVarInt(int value, ByteBuf bb) {
-        while (true) {
-            if ((value & ~SEGMENT_BITS) == 0) {
-                bb.writeByte(value);
-                return;
-            }
-
-            bb.writeByte((value & SEGMENT_BITS) | CONTINUE_BIT);
-
-            // Note: >>> means that the sign bit is shifted with the rest of the number rather than being left alone
-            value >>>= 7;
-        }
-    }
-
 }
